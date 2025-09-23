@@ -1,13 +1,156 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
+
+const formatCoordinate = (coord) => {
+  return parseFloat(coord).toFixed(6);
+};
 
 const ResultsDisplay = ({ results }) => {
+  // Extract values with defaults to avoid destructuring errors
+  const original_bbox = results?.original_bbox;
+  const tiles = results?.tiles || [];
+  const total_tiles = results?.total_tiles || 0;
+  const session_id = results?.session_id;
+  const tiles_directory = results?.tiles_directory;
+  
+  const [downloadingTiles, setDownloadingTiles] = useState(new Set());
+
+  const handleDownloadTile = useCallback(async (tile) => {
+    if (!session_id) return;
+    
+    setDownloadingTiles(prev => new Set(prev).add(tile.id));
+    
+    try {
+      const downloadUrl = `http://localhost:8000/download-tile/${session_id}/${tile.file_name}`;
+      console.log('Downloading tile:', downloadUrl);
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'image/tiff, application/octet-stream, */*'
+        }
+      });
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      console.log('Blob size:', blob.size);
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = tile.file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('Download completed successfully');
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert(`Download failed: ${error.message}`);
+    } finally {
+      setDownloadingTiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tile.id);
+        return newSet;
+      });
+    }
+  }, [session_id]);
+
+  const handleViewTile = useCallback((tile) => {
+    if (!session_id) return;
+    const viewUrl = `http://localhost:8000/download-tile/${session_id}/${tile.file_name}`;
+    console.log('Viewing tile:', viewUrl);
+    window.open(viewUrl, '_blank');
+  }, [session_id]);
+
+  const handleDownloadAllTiles = useCallback(async () => {
+    if (!session_id) return;
+    try {
+      const downloadUrl = `http://localhost:8000/download-all-tiles/${session_id}`;
+      console.log('Downloading all tiles:', downloadUrl);
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/zip, */*'
+        }
+      });
+      
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      console.log('ZIP blob size:', blob.size);
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `tiles_${session_id}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('ZIP download completed successfully');
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert(`Download failed: ${error.message}`);
+    }
+  }, [session_id]);
+
+  const handleDownloadSample = useCallback(() => {
+    const sampleTiles = tiles.slice(0, 10);
+    sampleTiles.forEach((tile, index) => {
+      setTimeout(() => {
+        handleDownloadTile(tile);
+      }, index * 500);
+    });
+  }, [tiles, handleDownloadTile]);
+
+  const handleExportCSV = useCallback(() => {
+    const csvContent = [
+      'Tile ID,Min Lat,Max Lat,Min Lon,Max Lon,File Name',
+      ...tiles.map(tile => 
+        `${tile.id},${tile.min_lat},${tile.max_lat},${tile.min_lon},${tile.max_lon},${tile.file_name}`
+      )
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tiles_metadata.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }, [tiles]);
+
+  const handleExportJSON = useCallback(() => {
+    if (!results) return;
+    const jsonContent = JSON.stringify(results, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tiles_metadata.json';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }, [results]);
+
+  // Early return after all hooks
   if (!results) return null;
-
-  const { original_bbox, tiles, total_tiles } = results;
-
-  const formatCoordinate = (coord) => {
-    return parseFloat(coord).toFixed(6);
-  };
 
   return (
     <div className="results-section space-y-8">
@@ -54,11 +197,13 @@ const ResultsDisplay = ({ results }) => {
             <div>
               <h4 className="text-xl font-bold text-blue-900">Processing Complete</h4>
               <p className="text-blue-700">Successfully generated {total_tiles} tiles from your GeoTIFF</p>
+              <p className="text-sm text-blue-600 mt-1">Session ID: {session_id}</p>
             </div>
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold text-blue-900">{total_tiles}</div>
             <div className="text-sm text-blue-600">Total Tiles</div>
+            <div className="text-xs text-blue-500 mt-1">Stored on server</div>
           </div>
         </div>
       </div>
@@ -105,11 +250,47 @@ const ResultsDisplay = ({ results }) => {
                 {tiles.map((tile, index) => (
                   <tr key={tile.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className="px-8 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                          <span className="text-sm font-bold text-blue-600">{tile.id}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                            <span className="text-sm font-bold text-blue-600">{tile.id}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900">Tile #{tile.id}</span>
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">Tile #{tile.id}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleViewTile(tile)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+                            title="View tile in new tab"
+                          >
+                            <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleDownloadTile(tile)}
+                            disabled={downloadingTiles.has(tile.id)}
+                            className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                              downloadingTiles.has(tile.id)
+                                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                : 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                            }`}
+                            title="Download tile file"
+                          >
+                            {downloadingTiles.has(tile.id) ? (
+                              <svg className="h-3 w-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            ) : (
+                              <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            )}
+                            {downloadingTiles.has(tile.id) ? 'Downloading...' : 'Download'}
+                          </button>
+                        </div>
                       </div>
                     </td>
                     <td className="px-8 py-4 whitespace-nowrap text-sm font-mono text-gray-600 bg-green-50">
@@ -141,50 +322,58 @@ const ResultsDisplay = ({ results }) => {
           <h3 className="text-2xl font-bold text-gray-900">Export Results</h3>
         </div>
         <p className="text-gray-600 mb-6">Download your tiling results in various formats for further analysis</p>
-        <div className="flex flex-wrap gap-4">
-          <button
-            onClick={() => {
-              const csvContent = [
-                'Tile ID,Min Lat,Max Lat,Min Lon,Max Lon',
-                ...tiles.map(tile => 
-                  `${tile.id},${tile.min_lat},${tile.max_lat},${tile.min_lon},${tile.max_lon}`
-                )
-              ].join('\n');
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Metadata Export */}
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-800">Export Metadata</h4>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleExportCSV}
+                className="inline-flex items-center px-4 py-3 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-300 transition-all duration-200"
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export CSV
+              </button>
               
-              const blob = new Blob([csvContent], { type: 'text/csv' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'tiles.csv';
-              a.click();
-              window.URL.revokeObjectURL(url);
-            }}
-            className="inline-flex items-center px-6 py-4 border border-transparent text-lg font-semibold rounded-xl text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-4 focus:ring-green-300 transition-all duration-200 transform hover:scale-105"
-          >
-            <svg className="h-6 w-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export CSV
-          </button>
-          
-          <button
-            onClick={() => {
-              const jsonContent = JSON.stringify(results, null, 2);
-              const blob = new Blob([jsonContent], { type: 'application/json' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'tiles.json';
-              a.click();
-              window.URL.revokeObjectURL(url);
-            }}
-            className="inline-flex items-center px-6 py-4 border-2 border-gray-300 text-lg font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-200 transform hover:scale-105"
-          >
-            <svg className="h-6 w-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            Export JSON
-          </button>
+              <button
+                onClick={handleExportJSON}
+                className="inline-flex items-center px-4 py-3 border-2 border-gray-300 text-sm font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-200"
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Export JSON
+              </button>
+            </div>
+          </div>
+
+          {/* Tile Files Download */}
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-800">Download Tiles</h4>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleDownloadAllTiles}
+                className="inline-flex items-center px-4 py-3 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200"
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download All Tiles (ZIP)
+              </button>
+              
+              <button
+                onClick={handleDownloadSample}
+                className="inline-flex items-center px-4 py-3 border-2 border-purple-300 text-sm font-semibold rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200"
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Download Sample (10 tiles)
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

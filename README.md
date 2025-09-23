@@ -7,8 +7,14 @@ A web application for processing GeoTIFF files and generating tiles with configu
 - **File Upload**: Drag and drop or click to upload GeoTIFF files
 - **Configurable Tiling**: Set custom tile sizes (256×256, 512×512, 1024×1024, or custom)
 - **Overlap Control**: Configure tile overlap (0.25, 0.5, 1.0, or custom)
+- **Tile Storage**: Automatically saves individual tile files as GeoTIFF
 - **Results Display**: View original bounding box and generated tiles in a responsive table
-- **Export Options**: Download results as CSV or JSON
+- **Download Options**: 
+  - Download individual tiles
+  - Bulk download all tiles as ZIP
+  - Download sample tiles
+  - Export metadata as CSV/JSON
+- **Session Management**: Organize tiles by processing sessions
 - **Modern UI**: Clean, responsive design with Tailwind CSS
 
 ## Tech Stack
@@ -73,7 +79,12 @@ A web application for processing GeoTIFF files and generating tiles with configu
 5. View the results including:
    - Original raster bounding box coordinates (in WGS84)
    - Generated tiles with their individual bounding boxes
-6. Export the results as CSV or JSON if needed
+   - Individual tile download buttons
+6. Download tiles:
+   - Individual tiles by clicking download buttons
+   - All tiles as a ZIP file
+   - Sample tiles (first 10)
+   - Export metadata as CSV or JSON
 
 ## API Endpoints
 
@@ -111,9 +122,25 @@ Upload and process a GeoTIFF file to generate tiles.
   ],
   "total_tiles": 1,
   "tile_size_pixels": 512,
-  "overlap_ratio": 0.5
+  "overlap_ratio": 0.5,
+  "session_id": "20250115_143022_example",
+  "tiles_directory": "/tiles/20250115_143022_example"
 }
 ```
+
+### Additional Endpoints
+
+#### GET /download-tile/{session_id}/{filename}
+Download a specific tile file.
+
+#### GET /download-all-tiles/{session_id}
+Download all tiles in a session as a ZIP file.
+
+#### GET /list-tiles/{session_id}
+List all tiles in a session with file information.
+
+#### DELETE /cleanup-session/{session_id}
+Clean up a session and delete all associated tile files.
 
 ## File Structure
 
@@ -121,6 +148,11 @@ Upload and process a GeoTIFF file to generate tiles.
 RasterLab/
 ├── backend/
 │   └── main.py              # FastAPI backend
+├── tiles/                   # Generated tile storage
+│   └── {session_id}/        # Session-specific tile directories
+│       ├── tile_000001.tif  # Individual tile files
+│       ├── tile_000002.tif
+│       └── ...
 ├── public/
 │   └── index.html           # HTML template
 ├── src/

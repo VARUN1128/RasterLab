@@ -1,13 +1,18 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import rasterio
 from rasterio.warp import transform_bounds, calculate_default_transform
 from rasterio.crs import CRS
+from rasterio.windows import Window
 import numpy as np
 import tempfile
 import os
+import shutil
 from typing import List, Dict, Any, Tuple
 import logging
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +28,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Create tiles directory if it doesn't exist
+TILES_DIR = "tiles"
+os.makedirs(TILES_DIR, exist_ok=True)
+
+# Mount static files for serving tiles
+app.mount("/tiles", StaticFiles(directory=TILES_DIR), name="tiles")
 
 def read_raster_bounds(file_path: str) -> Dict[str, float]:
     """
@@ -82,22 +94,28 @@ def read_raster_bounds(file_path: str) -> Dict[str, float]:
         logger.error(f"Error reading raster bounds: {str(e)}")
         raise Exception(f"Failed to read raster bounds: {str(e)}")
 
-def generate_tiles(file_path: str, tile_size: int, overlap: float) -> List[Dict[str, Any]]:
+def generate_tiles(file_path: str, tile_size: int, overlap: float, session_id: str) -> List[Dict[str, Any]]:
     """
     Generate tiles for a raster dataset with specified size and overlap.
+    Saves actual tile images to disk.
     
     Args:
         file_path: Path to the GeoTIFF file
         tile_size: Size of each tile in pixels (e.g., 512)
         overlap: Overlap ratio between 0 and 1 (e.g., 0.5 for 50% overlap)
+        session_id: Unique session identifier for organizing tiles
         
     Returns:
-        List of tile dictionaries with geographic bounding boxes
+        List of tile dictionaries with geographic bounding boxes and file paths
         
     Raises:
         Exception: If file cannot be read or tiling fails
     """
     try:
+        # Create session directory for tiles
+        session_dir = os.path.join(TILES_DIR, session_id)
+        os.makedirs(session_dir, exist_ok=True)
+        
         with rasterio.open(file_path) as dataset:
             height, width = dataset.height, dataset.width
             transform = dataset.transform
@@ -106,6 +124,7 @@ def generate_tiles(file_path: str, tile_size: int, overlap: float) -> List[Dict[
             logger.info(f"Raster dimensions: {width}x{height}")
             logger.info(f"Transform: {transform}")
             logger.info(f"CRS: {src_crs}")
+            logger.info(f"Saving tiles to: {session_dir}")
             
             # Calculate step size based on tile size and overlap
             step_size = int(tile_size * (1 - overlap))
@@ -129,6 +148,39 @@ def generate_tiles(file_path: str, tile_size: int, overlap: float) -> List[Dict[
                     
                     # Skip tiles that are too small (less than 10% of tile size)
                     if (col_end - col_start) < tile_size * 0.1 or (row_end - row_start) < tile_size * 0.1:
+                        continue
+                    
+                    # Create window for reading tile data
+                    window = Window(col_start, row_start, col_end - col_start, row_end - row_start)
+                    
+                    # Read tile data
+                    tile_data = dataset.read(window=window)
+                    
+                    # Calculate tile transform
+                    tile_transform = rasterio.windows.transform(window, dataset.transform)
+                    
+                    # Save tile as GeoTIFF
+                    tile_filename = f"tile_{tile_id:06d}.tif"
+                    tile_path = os.path.join(session_dir, tile_filename)
+                    
+                    try:
+                        with rasterio.open(
+                            tile_path,
+                            'w',
+                            driver='GTiff',
+                            height=tile_data.shape[1],
+                            width=tile_data.shape[2],
+                            count=tile_data.shape[0],
+                            dtype=tile_data.dtype,
+                            crs=src_crs,
+                            transform=tile_transform,
+                            compress='lzw'
+                        ) as tile_dataset:
+                            tile_dataset.write(tile_data)
+                        
+                        logger.info(f"Saved tile {tile_id}: {tile_filename}")
+                    except Exception as e:
+                        logger.error(f"Failed to save tile {tile_id}: {str(e)}")
                         continue
                     
                     # Convert pixel coordinates to geographic coordinates
@@ -169,11 +221,14 @@ def generate_tiles(file_path: str, tile_size: int, overlap: float) -> List[Dict[
                             "row_start": row_start,
                             "col_end": col_end,
                             "row_end": row_end
-                        }
+                        },
+                        "file_path": tile_path,
+                        "file_name": tile_filename,
+                        "download_url": f"/download-tile/{session_id}/{tile_filename}"
                     })
                     tile_id += 1
             
-            logger.info(f"Generated {len(tiles)} tiles")
+            logger.info(f"Generated {len(tiles)} tiles and saved to {session_dir}")
             return tiles
             
     except Exception as e:
@@ -201,6 +256,9 @@ async def upload_geotiff_file(
         if overlap < 0 or overlap >= 1:
             raise HTTPException(status_code=400, detail="Overlap must be between 0 and 1")
         
+        # Generate unique session ID
+        session_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename.split('.')[0]}"
+        
         # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.tif') as tmp_file:
             content = await file.read()
@@ -212,15 +270,17 @@ async def upload_geotiff_file(
             logger.info(f"Processing file: {file.filename}")
             original_bbox = read_raster_bounds(tmp_file_path)
             
-            # Generate tiles
-            tiles = generate_tiles(tmp_file_path, tile_size, overlap)
+            # Generate tiles and save them
+            tiles = generate_tiles(tmp_file_path, tile_size, overlap, session_id)
             
             return {
                 "original_bbox": original_bbox,
                 "tiles": tiles,
                 "total_tiles": len(tiles),
                 "tile_size_pixels": tile_size,
-                "overlap_ratio": overlap
+                "overlap_ratio": overlap,
+                "session_id": session_id,
+                "tiles_directory": f"/tiles/{session_id}"
             }
             
         finally:
@@ -241,6 +301,94 @@ async def root():
         "version": "2.0.0",
         "supported_formats": [".tif", ".tiff"]
     }
+
+@app.get("/download-tile/{session_id}/{filename}")
+async def download_tile(session_id: str, filename: str):
+    """Download a specific tile file"""
+    tile_path = os.path.join(TILES_DIR, session_id, filename)
+    
+    if not os.path.exists(tile_path):
+        raise HTTPException(status_code=404, detail="Tile not found")
+    
+    return FileResponse(
+        path=tile_path,
+        filename=filename,
+        media_type='image/tiff',
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@app.get("/download-all-tiles/{session_id}")
+async def download_all_tiles(session_id: str):
+    """Download all tiles as a ZIP file"""
+    import zipfile
+    from io import BytesIO
+    
+    session_dir = os.path.join(TILES_DIR, session_id)
+    
+    if not os.path.exists(session_dir):
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Create ZIP file in memory
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(session_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, session_dir)
+                zip_file.write(file_path, arcname)
+    
+    zip_buffer.seek(0)
+    zip_content = zip_buffer.getvalue()
+    
+    from fastapi.responses import Response
+    return Response(
+        content=zip_content,
+        media_type='application/zip',
+        headers={
+            "Content-Disposition": f"attachment; filename=tiles_{session_id}.zip",
+            "Content-Length": str(len(zip_content))
+        }
+    )
+
+@app.get("/list-tiles/{session_id}")
+async def list_tiles(session_id: str):
+    """List all tiles in a session"""
+    session_dir = os.path.join(TILES_DIR, session_id)
+    
+    if not os.path.exists(session_dir):
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    tiles = []
+    for filename in os.listdir(session_dir):
+        if filename.endswith('.tif'):
+            file_path = os.path.join(session_dir, filename)
+            file_size = os.path.getsize(file_path)
+            tiles.append({
+                "filename": filename,
+                "size_bytes": file_size,
+                "download_url": f"/download-tile/{session_id}/{filename}"
+            })
+    
+    return {
+        "session_id": session_id,
+        "tiles": tiles,
+        "total_tiles": len(tiles)
+    }
+
+@app.delete("/cleanup-session/{session_id}")
+async def cleanup_session(session_id: str):
+    """Clean up a session and all its tiles"""
+    session_dir = os.path.join(TILES_DIR, session_id)
+    
+    if not os.path.exists(session_dir):
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        shutil.rmtree(session_dir)
+        return {"message": f"Session {session_id} cleaned up successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup session: {str(e)}")
 
 @app.get("/health")
 async def health_check():
