@@ -1,0 +1,95 @@
+/* Custom styles for the app */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.main-content {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Desktop optimizations */
+@media (min-width: 1280px) {
+  .main-content {
+    max-width: 1600px;
+  }
+  
+  .desktop-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+    align-items: start;
+  }
+}
+
+.file-upload-area {
+  transition: all 0.3s ease;
+}
+
+.file-upload-area:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.file-upload-area.dragover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.results-section {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tile-table {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.tile-table::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tile-table::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.tile-table::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.tile-table::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Ensure perfect centering */
+.centered-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.form-container {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
