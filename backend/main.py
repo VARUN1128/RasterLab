@@ -94,14 +94,15 @@ def read_raster_bounds(file_path: str) -> Dict[str, float]:
         logger.error(f"Error reading raster bounds: {str(e)}")
         raise Exception(f"Failed to read raster bounds: {str(e)}")
 
-def generate_tiles(file_path: str, tile_size: int, overlap: float, session_id: str) -> List[Dict[str, Any]]:
+def generate_tiles(file_path: str, tile_width: int, tile_height: int, overlap: float, session_id: str) -> List[Dict[str, Any]]:
     """
     Generate tiles for a raster dataset with specified size and overlap.
     Saves actual tile images to disk.
     
     Args:
         file_path: Path to the GeoTIFF file
-        tile_size: Size of each tile in pixels (e.g., 512)
+        tile_width: Width of each tile in pixels (e.g., 512)
+        tile_height: Height of each tile in pixels (e.g., 256)
         overlap: Overlap ratio between 0 and 1 (e.g., 0.5 for 50% overlap)
         session_id: Unique session identifier for organizing tiles
         
@@ -126,14 +127,15 @@ def generate_tiles(file_path: str, tile_size: int, overlap: float, session_id: s
             logger.info(f"CRS: {src_crs}")
             logger.info(f"Saving tiles to: {session_dir}")
             
-            # Calculate step size based on tile size and overlap
-            step_size = int(tile_size * (1 - overlap))
+            # Calculate step size based on tile dimensions and overlap
+            step_size_x = int(tile_width * (1 - overlap))
+            step_size_y = int(tile_height * (1 - overlap))
             
             # Calculate number of tiles needed
-            num_tiles_x = int(np.ceil(width / step_size))
-            num_tiles_y = int(np.ceil(height / step_size))
+            num_tiles_x = int(np.ceil(width / step_size_x))
+            num_tiles_y = int(np.ceil(height / step_size_y))
             
-            logger.info(f"Generating {num_tiles_x}x{num_tiles_y} tiles with step size {step_size}")
+            logger.info(f"Generating {num_tiles_x}x{num_tiles_y} tiles with step size {step_size_x}x{step_size_y}")
             
             tiles = []
             tile_id = 1
@@ -141,13 +143,13 @@ def generate_tiles(file_path: str, tile_size: int, overlap: float, session_id: s
             for i in range(num_tiles_x):
                 for j in range(num_tiles_y):
                     # Calculate pixel window boundaries
-                    col_start = i * step_size
-                    row_start = j * step_size
-                    col_end = min(col_start + tile_size, width)
-                    row_end = min(row_start + tile_size, height)
+                    col_start = i * step_size_x
+                    row_start = j * step_size_y
+                    col_end = min(col_start + tile_width, width)
+                    row_end = min(row_start + tile_height, height)
                     
-                    # Skip tiles that are too small (less than 10% of tile size)
-                    if (col_end - col_start) < tile_size * 0.1 or (row_end - row_start) < tile_size * 0.1:
+                    # Skip tiles that are too small (less than 10% of tile dimensions)
+                    if (col_end - col_start) < tile_width * 0.1 or (row_end - row_start) < tile_height * 0.1:
                         continue
                     
                     # Create window for reading tile data
@@ -238,8 +240,9 @@ def generate_tiles(file_path: str, tile_size: int, overlap: float, session_id: s
 @app.post("/upload-geotiff")
 async def upload_geotiff_file(
     file: UploadFile = File(...),
-    tile_size: int = Form(...),
-    overlap: float = Form(...)
+    tile_width: int = Form(256),
+    tile_height: int = Form(256),
+    overlap: float = Form(0.25)
 ):
     """
     Upload and process GeoTIFF file to generate tiles.
@@ -250,8 +253,8 @@ async def upload_geotiff_file(
             raise HTTPException(status_code=400, detail="Only .tif/.tiff files are allowed")
         
         # Validate parameters
-        if tile_size <= 0:
-            raise HTTPException(status_code=400, detail="Tile size must be positive")
+        if tile_width <= 0 or tile_height <= 0:
+            raise HTTPException(status_code=400, detail="Tile dimensions must be positive")
         
         if overlap < 0 or overlap >= 1:
             raise HTTPException(status_code=400, detail="Overlap must be between 0 and 1")
@@ -271,13 +274,14 @@ async def upload_geotiff_file(
             original_bbox = read_raster_bounds(tmp_file_path)
             
             # Generate tiles and save them
-            tiles = generate_tiles(tmp_file_path, tile_size, overlap, session_id)
+            tiles = generate_tiles(tmp_file_path, tile_width, tile_height, overlap, session_id)
             
             return {
                 "original_bbox": original_bbox,
                 "tiles": tiles,
                 "total_tiles": len(tiles),
-                "tile_size_pixels": tile_size,
+                "tile_width": tile_width,
+                "tile_height": tile_height,
                 "overlap_ratio": overlap,
                 "session_id": session_id,
                 "tiles_directory": f"/tiles/{session_id}"

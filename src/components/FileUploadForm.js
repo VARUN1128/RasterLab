@@ -3,6 +3,8 @@ import React, { useState, useRef } from 'react';
 const FileUploadForm = ({ onSubmit, loading }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [tileSize, setTileSize] = useState(256);
+  const [tileWidth, setTileWidth] = useState(256);
+  const [tileHeight, setTileHeight] = useState(256);
   const [overlap, setOverlap] = useState(0.25);
   const [customTileSize, setCustomTileSize] = useState('');
   const [customOverlap, setCustomOverlap] = useState('');
@@ -58,10 +60,13 @@ const FileUploadForm = ({ onSubmit, loading }) => {
   const handleTileSizeChange = (e) => {
     const value = e.target.value;
     if (value === 'custom') {
-      setCustomTileSize(tileSize.toString());
+      setCustomTileSize(`${tileWidth}x${tileHeight}`);
       setTileSize('');
     } else {
-      setTileSize(parseInt(value));
+      const size = parseInt(value);
+      setTileSize(size);
+      setTileWidth(size);
+      setTileHeight(size);
       setCustomTileSize('');
     }
   };
@@ -80,8 +85,25 @@ const FileUploadForm = ({ onSubmit, loading }) => {
   const handleCustomTileSizeChange = (e) => {
     const value = e.target.value;
     setCustomTileSize(value);
-    if (value && !isNaN(parseInt(value)) && parseInt(value) > 0) {
-      setTileSize(parseInt(value));
+    
+    // Parse x*y format
+    if (value && value.includes('x')) {
+      const parts = value.split('x');
+      if (parts.length === 2) {
+        const width = parseInt(parts[0]);
+        const height = parseInt(parts[1]);
+        if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+          setTileWidth(width);
+          setTileHeight(height);
+          setTileSize(Math.max(width, height)); // Use max for backward compatibility
+        }
+      }
+    } else if (value && !isNaN(parseInt(value)) && parseInt(value) > 0) {
+      // Fallback for single number (square tiles)
+      const size = parseInt(value);
+      setTileSize(size);
+      setTileWidth(size);
+      setTileHeight(size);
     }
   };
 
@@ -101,8 +123,8 @@ const FileUploadForm = ({ onSubmit, loading }) => {
       return;
     }
 
-    if (!tileSize || tileSize <= 0) {
-      alert('Please enter a valid tile size');
+    if ((!tileWidth || tileWidth <= 0) || (!tileHeight || tileHeight <= 0)) {
+      alert('Please enter valid tile dimensions');
       return;
     }
 
@@ -113,7 +135,8 @@ const FileUploadForm = ({ onSubmit, loading }) => {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
-    formData.append('tile_size', tileSize);
+    formData.append('tile_width', tileWidth);
+    formData.append('tile_height', tileHeight);
     formData.append('overlap', overlap);
 
     onSubmit(formData);
@@ -218,15 +241,14 @@ const FileUploadForm = ({ onSubmit, loading }) => {
             
             {customTileSize !== '' && (
               <input
-                type="number"
+                type="text"
                 value={customTileSize}
                 onChange={handleCustomTileSizeChange}
-                placeholder="Enter custom tile size in pixels"
-                min="1"
+                placeholder="Enter custom tile size (e.g., 512x256 or 512)"
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
               />
             )}
-            <p className="text-sm text-gray-500">Size of each tile in pixels (e.g., 512 for 512×512 tiles)</p>
+            <p className="text-sm text-gray-500">Size of each tile in pixels (e.g., 512x256 for rectangular tiles or 512 for square tiles)</p>
           </div>
         </div>
 
