@@ -6,20 +6,43 @@ A powerful web application for processing GeoTIFF files and generating tiles wit
 ![Python](https://img.shields.io/badge/Python-3.8+-green.svg)
 ![React](https://img.shields.io/badge/React-18.2.0-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100.0-red.svg)
+![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)
 
 ## 📋 Table of Contents
 
+- [Quick Start](#quick-start)
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Technology Stack](#technology-stack)
 - [Prerequisites](#prerequisites)
 - [Installation & Setup](#installation--setup)
-- [Usage Guide](#usage-guide)
+- [Usage Examples](#usage-examples)
+- [Testing](#testing)
 - [API Documentation](#api-documentation)
 - [Project Structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+
+## 🚀 Quick Start
+
+Get RasterLab running in 3 simple steps:
+
+```bash
+# 1. Clone and navigate to project
+git clone <repository-url>
+cd "SAR Analysis webapp"
+
+# 2. Install dependencies (run in separate terminals)
+pip install -r requirements.txt
+npm install
+
+# 3. Start the application
+python backend/main.py    # Terminal 1 - Backend (port 8000)
+npm start                 # Terminal 2 - Frontend (port 3000)
+```
+
+Open `http://localhost:3000` in your browser and start processing GeoTIFF files!
 
 ## 🎯 Overview
 
@@ -72,10 +95,11 @@ RasterLab is a comprehensive web application designed for geospatial data proces
 - **NumPy 1.24.3** - Numerical computing
 - **Uvicorn 0.22.0** - ASGI server
 
-### Development Tools
-- **Node.js 14+** - JavaScript runtime
-- **npm** - Package manager
-- **pip** - Python package manager
+### Testing
+- **Jest** - JavaScript testing framework
+- **React Testing Library** - React component testing
+- **Pytest** - Python testing framework
+- **FastAPI TestClient** - API testing
 
 ## 📋 Prerequisites
 
@@ -94,7 +118,36 @@ Before installing RasterLab, ensure you have the following installed on your sys
 
 ## 🚀 Installation & Setup
 
-### Step 1: Clone the Repository
+### Method 1: Automated Setup (Recommended)
+
+We provide automated setup scripts for easy installation:
+
+#### Windows
+```bash
+# Run the automated setup script
+.\setup.bat
+
+# Or manually run individual scripts
+.\install_dependencies.bat
+.\start_application.bat
+```
+
+#### macOS/Linux
+```bash
+# Make scripts executable
+chmod +x setup.sh install_dependencies.sh start_application.sh
+
+# Run the automated setup script
+./setup.sh
+
+# Or manually run individual scripts
+./install_dependencies.sh
+./start_application.sh
+```
+
+### Method 2: Manual Setup
+
+#### Step 1: Clone the Repository
 
 ```bash
 # Clone the repository
@@ -102,14 +155,9 @@ git clone <repository-url>
 cd "SAR Analysis webapp"
 ```
 
-### Step 2: Backend Setup
+#### Step 2: Backend Setup
 
-1. **Navigate to the project directory**:
-   ```bash
-   cd "D:\SAR Analysis webapp"
-   ```
-
-2. **Create a virtual environment** (recommended):
+1. **Create a virtual environment** (recommended):
    ```bash
    python -m venv venv
    
@@ -120,23 +168,23 @@ cd "SAR Analysis webapp"
    source venv/bin/activate
    ```
 
-3. **Install Python dependencies**:
+2. **Install Python dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Start the FastAPI backend**:
+3. **Start the FastAPI backend**:
    ```bash
    python backend/main.py
    ```
    
    The backend will be available at `http://localhost:8000`
 
-### Step 3: Frontend Setup
+#### Step 3: Frontend Setup
 
 1. **Open a new terminal** and navigate to the project directory:
    ```bash
-   cd "D:\SAR Analysis webapp"
+   cd "SAR Analysis webapp"
    ```
 
 2. **Install Node.js dependencies**:
@@ -151,59 +199,234 @@ cd "SAR Analysis webapp"
    
    The frontend will be available at `http://localhost:3000`
 
-### Step 4: Verify Installation
+#### Step 4: Verify Installation
 
 1. Open your browser and navigate to `http://localhost:3000`
 2. You should see the RasterLab interface
 3. The backend API should be accessible at `http://localhost:8000`
 
-## 📖 Usage Guide
+## 📖 Usage Examples
 
-### Basic Workflow
+### Example 1: Basic SAR Data Processing
 
-1. **Access the Application**
-   - Open your browser and go to `http://localhost:3000`
-   - You'll see the RasterLab interface with upload form and results area
+```bash
+# 1. Start the application
+python backend/main.py    # Terminal 1
+npm start                 # Terminal 2
 
-2. **Upload a GeoTIFF File**
-   - Drag and drop a `.tif` or `.tiff` file onto the upload area, or
-   - Click the upload area to browse and select a file
-   - Supported formats: GeoTIFF files with proper geospatial metadata
+# 2. Open browser to http://localhost:3000
+# 3. Upload a SAR GeoTIFF file (e.g., Sentinel-1 data)
+# 4. Configure parameters:
+#    - Tile Size: 512x512
+#    - Overlap: 0.25 (25%)
+# 5. Click "Generate Tiles"
+# 6. Download results as ZIP or individual tiles
+```
 
-3. **Configure Tiling Parameters**
-   - **Tile Size**: Choose from preset sizes (256×256, 512×512, 1024×1024) or enter custom dimensions
-   - **Overlap Ratio**: Set the overlap between adjacent tiles (0.0 to 0.99)
-   - **Custom Dimensions**: Enter format like "512x256" for rectangular tiles
+### Example 2: Custom Tile Configuration
 
-4. **Generate Tiles**
-   - Click "Generate Tiles" to start processing
-   - Monitor the progress indicator
-   - Wait for processing to complete
+```bash
+# For rectangular tiles (useful for specific ML models)
+# Tile Size: 512x256
+# Overlap: 0.5 (50% overlap for better ML training)
 
-5. **View and Download Results**
-   - Review the original raster bounding box coordinates
-   - Browse the generated tiles table
-   - Download individual tiles or export all tiles as ZIP
-   - Export metadata in CSV or JSON format
+# For high-resolution analysis
+# Tile Size: 1024x1024
+# Overlap: 0.1 (10% overlap for efficiency)
+```
 
-### Advanced Usage
+### Example 3: API Usage with cURL
 
-#### Custom Tile Sizes
-- Enter custom dimensions in the format: `width x height` (e.g., "512x256")
-- For square tiles, enter just the size (e.g., "512")
-- Minimum tile size: 64x64 pixels
+```bash
+# Upload and process a GeoTIFF file
+curl -X POST "http://localhost:8000/upload-geotiff" \
+  -F "file=@sample_data.tif" \
+  -F "tile_width=512" \
+  -F "tile_height=512" \
+  -F "overlap=0.25"
 
-#### Overlap Configuration
-- **0.0**: No overlap between tiles
-- **0.25**: 25% overlap (recommended for most use cases)
-- **0.5**: 50% overlap (useful for machine learning)
-- **0.75**: 75% overlap (maximum recommended overlap)
+# Download all tiles as ZIP
+curl -X GET "http://localhost:8000/download-all-tiles/session_id" \
+  -o "tiles.zip"
 
-#### File Requirements
-- **Format**: GeoTIFF (.tif or .tiff)
-- **Coordinate System**: Any supported CRS (automatically converted to WGS84)
-- **Size**: No strict limit, but larger files take longer to process
-- **Bands**: Single or multi-band raster data supported
+# List tiles in a session
+curl -X GET "http://localhost:8000/list-tiles/session_id"
+```
+
+### Example 4: Python API Client
+
+```python
+import requests
+import json
+
+# Upload and process file
+def process_geotiff(file_path, tile_size=512, overlap=0.25):
+    url = "http://localhost:8000/upload-geotiff"
+    
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        data = {
+            'tile_width': tile_size,
+            'tile_height': tile_size,
+            'overlap': overlap
+        }
+        
+        response = requests.post(url, files=files, data=data)
+        return response.json()
+
+# Usage
+result = process_geotiff("sample_data.tif", tile_size=256, overlap=0.5)
+print(f"Generated {result['total_tiles']} tiles")
+print(f"Session ID: {result['session_id']}")
+```
+
+### Example 5: Batch Processing Script
+
+```python
+import os
+import requests
+from pathlib import Path
+
+def batch_process_geotiffs(directory, tile_size=512, overlap=0.25):
+    """Process all GeoTIFF files in a directory"""
+    results = []
+    
+    for file_path in Path(directory).glob("*.tif"):
+        print(f"Processing {file_path.name}...")
+        
+        try:
+            result = process_geotiff(str(file_path), tile_size, overlap)
+            results.append({
+                'file': file_path.name,
+                'tiles': result['total_tiles'],
+                'session_id': result['session_id']
+            })
+            print(f"✓ Generated {result['total_tiles']} tiles")
+            
+        except Exception as e:
+            print(f"✗ Error processing {file_path.name}: {e}")
+    
+    return results
+
+# Usage
+results = batch_process_geotiffs("./data/", tile_size=256)
+```
+
+## 🧪 Testing
+
+### Running Tests
+
+#### Frontend Tests
+```bash
+# Run all frontend tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Run specific test file
+npm test -- --testNamePattern="FileUploadForm"
+```
+
+#### Backend Tests
+```bash
+# Run all backend tests
+pytest
+
+# Run tests with verbose output
+pytest -v
+
+# Run tests with coverage
+pytest --cov=backend
+
+# Run specific test file
+pytest tests/test_api.py
+
+# Run tests in parallel
+pytest -n auto
+```
+
+#### Integration Tests
+```bash
+# Run full integration test suite
+pytest tests/integration/
+
+# Test with sample data
+pytest tests/integration/ --sample-data
+```
+
+### Test Coverage
+
+```bash
+# Generate coverage report for frontend
+npm test -- --coverage --watchAll=false
+
+# Generate coverage report for backend
+pytest --cov=backend --cov-report=html
+
+# View coverage report
+open htmlcov/index.html  # macOS
+start htmlcov/index.html  # Windows
+```
+
+### Test Examples
+
+#### Frontend Component Test
+```javascript
+// tests/components/FileUploadForm.test.js
+import { render, screen, fireEvent } from '@testing-library/react';
+import FileUploadForm from '../../src/components/FileUploadForm';
+
+test('renders file upload form', () => {
+  render(<FileUploadForm onSubmit={jest.fn()} loading={false} />);
+  
+  expect(screen.getByText('Upload GeoTIFF File')).toBeInTheDocument();
+  expect(screen.getByText('Generate Tiles')).toBeInTheDocument();
+});
+
+test('handles file selection', () => {
+  const mockOnSubmit = jest.fn();
+  render(<FileUploadForm onSubmit={mockOnSubmit} loading={false} />);
+  
+  const file = new File(['test'], 'test.tif', { type: 'image/tiff' });
+  const input = screen.getByLabelText(/file/i);
+  
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(screen.getByText('test.tif')).toBeInTheDocument();
+});
+```
+
+#### Backend API Test
+```python
+# tests/test_api.py
+import pytest
+from fastapi.testclient import TestClient
+from backend.main import app
+
+client = TestClient(app)
+
+def test_health_check():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+
+def test_upload_geotiff():
+    with open("test_data/sample.tif", "rb") as f:
+        response = client.post(
+            "/upload-geotiff",
+            files={"file": f},
+            data={"tile_width": 256, "tile_height": 256, "overlap": 0.25}
+        )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert "tiles" in data
+    assert "session_id" in data
+    assert data["total_tiles"] > 0
+```
 
 ## 📚 API Documentation
 
@@ -336,13 +559,23 @@ SAR Analysis webapp/
 │   └── 📄 index.css               # Global styles
 ├── 📁 public/
 │   └── 📄 index.html              # HTML template
+├── 📁 tests/                      # Test files
+│   ├── 📁 frontend/               # Frontend tests
+│   ├── 📁 backend/                # Backend tests
+│   └── 📁 integration/            # Integration tests
 ├── 📁 tiles/                      # Generated tile storage
 │   └── 📁 {session_id}/           # Session-specific directories
 │       ├── 📄 tile_000001.tif     # Individual tile files
 │       ├── 📄 tile_000002.tif
 │       └── 📄 ...
+├── 📁 scripts/                    # Setup and utility scripts
+│   ├── 📄 setup.bat              # Windows setup script
+│   ├── 📄 setup.sh               # Unix setup script
+│   ├── 📄 install_dependencies.bat
+│   └── 📄 start_application.bat
 ├── 📄 package.json                # Node.js dependencies
 ├── 📄 requirements.txt            # Python dependencies
+├── 📄 pytest.ini                 # Pytest configuration
 ├── 📄 tailwind.config.js          # Tailwind CSS configuration
 ├── 📄 postcss.config.js           # PostCSS configuration
 ├── 📄 start_backend.bat           # Windows backend startup script
@@ -432,7 +665,7 @@ We welcome contributions to RasterLab! Here's how you can help:
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature-name`
 3. Make your changes
-4. Test thoroughly
+4. Run tests: `npm test && pytest`
 5. Submit a pull request
 
 ### Areas for Contribution
