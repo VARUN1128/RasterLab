@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 
 const formatCoordinate = (coord) => {
   return parseFloat(coord).toFixed(6);
@@ -7,10 +7,9 @@ const formatCoordinate = (coord) => {
 const ResultsDisplay = ({ results }) => {
   // Extract values with defaults to avoid destructuring errors
   const original_bbox = results?.original_bbox;
-  const tiles = results?.tiles || [];
+  const tiles = useMemo(() => results?.tiles || [], [results?.tiles]);
   const total_tiles = results?.total_tiles || 0;
   const session_id = results?.session_id;
-  const tiles_directory = results?.tiles_directory;
   
   const [downloadingTiles, setDownloadingTiles] = useState(new Set());
 
